@@ -95,6 +95,26 @@ class Team extends Model
     }
 
     /**
+     * Get all budgets for this team.
+     *
+     * @return HasMany<Budget, $this>
+     */
+    public function budgets(): HasMany
+    {
+        return $this->hasMany(Budget::class);
+    }
+
+    /**
+     * Get all transactions for this team.
+     *
+     * @return HasMany<Transaction, $this>
+     */
+    public function transactions(): HasMany
+    {
+        return $this->hasMany(Transaction::class);
+    }
+
+    /**
      * Get the attributes that should be cast.
      *
      * @return array<string, string>
