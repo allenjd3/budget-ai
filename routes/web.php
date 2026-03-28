@@ -3,6 +3,7 @@
 use App\Http\Controllers\BudgetController;
 use App\Http\Controllers\BudgetLineController;
 use App\Http\Controllers\CategoryController;
+use App\Http\Controllers\CsvImportController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\Teams\TeamInvitationController;
 use App\Http\Controllers\TransactionController;
@@ -40,6 +41,11 @@ Route::middleware(['auth', 'verified', EnsureTeamMembership::class])
                 'teams' => 'current_team',
             ])
             ->only(['index', 'create', 'store', 'edit', 'update', 'destroy']);
+
+        Route::get('teams/{current_team}/imports', [CsvImportController::class, 'index'])->name('teams.imports.index');
+        Route::post('teams/{current_team}/imports', [CsvImportController::class, 'store'])->name('teams.imports.store');
+        Route::get('teams/{current_team}/imports/{import}/map', [CsvImportController::class, 'map'])->name('teams.imports.map');
+        Route::post('teams/{current_team}/imports/{import}/confirm', [CsvImportController::class, 'confirm'])->name('teams.imports.confirm');
     });
 
 Route::middleware(['auth'])->group(function () {

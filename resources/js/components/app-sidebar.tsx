@@ -1,5 +1,5 @@
 import { Link, usePage } from '@inertiajs/react';
-import { BookOpen, FolderGit2, LayoutGrid, Receipt, Tags, Wallet } from 'lucide-react';
+import { BookOpen, FolderGit2, LayoutGrid, Receipt, Tags, Upload, Wallet } from 'lucide-react';
 import AppLogo from '@/components/app-logo';
 import { NavFooter } from '@/components/nav-footer';
 import { NavMain } from '@/components/nav-main';
@@ -18,6 +18,7 @@ import { dashboard } from '@/routes';
 import { index as budgetsIndex } from '@/actions/App/Http/Controllers/BudgetController';
 import { index as transactionsIndex } from '@/actions/App/Http/Controllers/TransactionController';
 import { index as categoriesIndex } from '@/actions/App/Http/Controllers/CategoryController';
+import { index as importsIndex } from '@/actions/App/Http/Controllers/CsvImportController';
 import type { NavItem } from '@/types';
 
 export function AppSidebar() {
@@ -45,6 +46,11 @@ export function AppSidebar() {
             title: 'Categories',
             href: teamSlug ? categoriesIndex.url(teamSlug) : '/',
             icon: Tags,
+        },
+        {
+            title: 'Import',
+            href: teamSlug ? importsIndex.url(teamSlug) : '/',
+            icon: Upload,
         },
     ];
 
