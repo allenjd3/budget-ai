@@ -1,5 +1,5 @@
 import { Link, usePage } from '@inertiajs/react';
-import { BookOpen, FolderGit2, LayoutGrid } from 'lucide-react';
+import { BookOpen, FolderGit2, LayoutGrid, Receipt, Tags, Wallet } from 'lucide-react';
 import AppLogo from '@/components/app-logo';
 import { NavFooter } from '@/components/nav-footer';
 import { NavMain } from '@/components/nav-main';
@@ -15,19 +15,36 @@ import {
     SidebarMenuItem,
 } from '@/components/ui/sidebar';
 import { dashboard } from '@/routes';
+import { index as budgetsIndex } from '@/actions/App/Http/Controllers/BudgetController';
+import { index as transactionsIndex } from '@/actions/App/Http/Controllers/TransactionController';
+import { index as categoriesIndex } from '@/actions/App/Http/Controllers/CategoryController';
 import type { NavItem } from '@/types';
 
 export function AppSidebar() {
     const page = usePage();
-    const dashboardUrl = page.props.currentTeam
-        ? dashboard(page.props.currentTeam.slug)
-        : '/';
+    const teamSlug = page.props.currentTeam?.slug;
+    const dashboardUrl = teamSlug ? dashboard(teamSlug) : '/';
 
     const mainNavItems: NavItem[] = [
         {
             title: 'Dashboard',
             href: dashboardUrl,
             icon: LayoutGrid,
+        },
+        {
+            title: 'Budgets',
+            href: teamSlug ? budgetsIndex.url(teamSlug) : '/',
+            icon: Wallet,
+        },
+        {
+            title: 'Transactions',
+            href: teamSlug ? transactionsIndex.url(teamSlug) : '/',
+            icon: Receipt,
+        },
+        {
+            title: 'Categories',
+            href: teamSlug ? categoriesIndex.url(teamSlug) : '/',
+            icon: Tags,
         },
     ];
 
