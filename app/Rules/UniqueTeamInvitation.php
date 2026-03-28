@@ -22,7 +22,7 @@ class UniqueTeamInvitation implements ValidationRule
      */
     public function validate(string $attribute, mixed $value, Closure $fail): void
     {
-        $email = strtolower($value);
+        $email = strtolower(is_string($value) ? $value : '');
 
         $isMember = $this->team->members()
             ->whereRaw('LOWER(email) = ?', [$email])

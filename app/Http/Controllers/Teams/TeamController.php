@@ -7,7 +7,9 @@ use App\Enums\TeamRole;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Teams\DeleteTeamRequest;
 use App\Http\Requests\Teams\SaveTeamRequest;
+use App\Models\Membership;
 use App\Models\Team;
+use App\Models\TeamInvitation;
 use App\Models\User;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -23,6 +25,7 @@ class TeamController extends Controller
      */
     public function index(Request $request): Response
     {
+        /** @var User $user */
         $user = $request->user();
 
         return Inertia::render('teams/index', [
@@ -35,7 +38,13 @@ class TeamController extends Controller
      */
     public function store(SaveTeamRequest $request, CreateTeam $createTeam): RedirectResponse
     {
-        $team = $createTeam->handle($request->user(), $request->validated('name'));
+        /** @var User $user */
+        $user = $request->user();
+
+        /** @var string $name */
+        $name = $request->validated('name');
+
+        $team = $createTeam->handle($user, $name);
 
         return to_route('teams.edit', ['team' => $team->slug]);
     }
@@ -45,6 +54,7 @@ class TeamController extends Controller
      */
     public function edit(Request $request, Team $team): Response
     {
+        /** @var User $user */
         $user = $request->user();
 
         return Inertia::render('teams/edit', [
@@ -54,23 +64,25 @@ class TeamController extends Controller
                 'slug' => $team->slug,
                 'isPersonal' => $team->is_personal,
             ],
-            'members' => $team->members()->get()->map(fn ($member) => [
-                'id' => $member->id,
-                'name' => $member->name,
-                'email' => $member->email,
-                'avatar' => $member->avatar ?? null,
-                'role' => $member->pivot->role->value,
-                'role_label' => $member->pivot->role?->label(),
-            ]),
+            'members' => $team->memberships()
+                ->with('user')
+                ->get()
+                ->map(fn (Membership $membership) => [
+                    'id' => $membership->user?->id,
+                    'name' => $membership->user?->name,
+                    'email' => $membership->user?->email,
+                    'role' => $membership->role?->value,
+                    'role_label' => $membership->role?->label(),
+                ]),
             'invitations' => $team->invitations()
                 ->whereNull('accepted_at')
                 ->get()
-                ->map(fn ($invitation) => [
+                ->map(fn (TeamInvitation $invitation) => [
                     'code' => $invitation->code,
                     'email' => $invitation->email,
-                    'role' => $invitation->role->value,
-                    'role_label' => $invitation->role->label(),
-                    'created_at' => $invitation->created_at->toISOString(),
+                    'role' => $invitation->role?->value,
+                    'role_label' => $invitation->role?->label(),
+                    'created_at' => $invitation->created_at?->toISOString(),
                 ]),
             'permissions' => $user->toTeamPermissions($team),
             'availableRoles' => TeamRole::assignable(),
@@ -100,9 +112,12 @@ class TeamController extends Controller
      */
     public function switch(Request $request, Team $team): RedirectResponse
     {
-        abort_unless($request->user()->belongsToTeam($team), 403);
+        /** @var User $user */
+        $user = $request->user();
 
-        $request->user()->switchTeam($team);
+        abort_unless($user->belongsToTeam($team), 403);
+
+        $user->switchTeam($team);
 
         return back();
     }
@@ -112,7 +127,9 @@ class TeamController extends Controller
      */
     public function destroy(DeleteTeamRequest $request, Team $team): RedirectResponse
     {
+        /** @var User $user */
         $user = $request->user();
+
         $fallbackTeam = $user->isCurrentTeam($team)
             ? $user->fallbackTeam($team)
             : null;
@@ -120,7 +137,12 @@ class TeamController extends Controller
         DB::transaction(function () use ($user, $team) {
             User::where('current_team_id', $team->id)
                 ->where('id', '!=', $user->id)
-                ->each(fn (User $affectedUser) => $affectedUser->switchTeam($affectedUser->personalTeam()));
+                ->each(function (User $affectedUser): void {
+                    $personalTeam = $affectedUser->personalTeam();
+                    if ($personalTeam !== null) {
+                        $affectedUser->switchTeam($personalTeam);
+                    }
+                });
 
             $team->invitations()->delete();
             $team->memberships()->delete();
@@ -129,7 +151,6 @@ class TeamController extends Controller
 
         if ($fallbackTeam) {
             $user->switchTeam($fallbackTeam);
-
         }
 
         return to_route('teams.index');

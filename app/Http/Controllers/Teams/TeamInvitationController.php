@@ -8,6 +8,7 @@ use App\Http\Requests\Teams\AcceptTeamInvitationRequest;
 use App\Http\Requests\Teams\CreateTeamInvitationRequest;
 use App\Models\Team;
 use App\Models\TeamInvitation;
+use App\Models\User;
 use App\Notifications\Teams\TeamInvitation as TeamInvitationNotification;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\DB;
@@ -23,10 +24,13 @@ class TeamInvitationController extends Controller
     {
         Gate::authorize('inviteMember', $team);
 
+        /** @var User $user */
+        $user = $request->user();
+
         $invitation = $team->invitations()->create([
             'email' => $request->validated('email'),
-            'role' => TeamRole::from($request->validated('role')),
-            'invited_by' => $request->user()->id,
+            'role' => TeamRole::from($request->string('role')->value()),
+            'invited_by' => $user->id,
             'expires_at' => now()->addDays(3),
         ]);
 
@@ -55,9 +59,11 @@ class TeamInvitationController extends Controller
      */
     public function accept(AcceptTeamInvitationRequest $request, TeamInvitation $invitation): RedirectResponse
     {
+        /** @var User $user */
         $user = $request->user();
 
         DB::transaction(function () use ($user, $invitation) {
+            /** @var Team $team */
             $team = $invitation->team;
 
             $membership = $team->memberships()->firstOrCreate(

@@ -2,6 +2,7 @@
 
 namespace App\Http\Responses;
 
+use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\URL;
 use Laravel\Fortify\Contracts\LoginResponse as LoginResponseContract;
@@ -11,8 +12,9 @@ class LoginResponse implements LoginResponseContract
 {
     public function toResponse($request): Response
     {
+        /** @var User $user */
         $user = $request->user();
-        $team = $user?->currentTeam ?? $user?->personalTeam();
+        $team = $user->currentTeam ?? $user->personalTeam();
 
         if (! $team) {
             abort(403);

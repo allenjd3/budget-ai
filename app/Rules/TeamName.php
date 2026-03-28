@@ -17,7 +17,7 @@ class TeamName implements ValidationRule
      */
     public function validate(string $attribute, mixed $value, Closure $fail): void
     {
-        $name = strtolower(trim($value));
+        $name = strtolower(trim(is_string($value) ? $value : ''));
 
         if (in_array($name, $this->reservedNames(), true)) {
             $fail('This team name is reserved and cannot be used.');
@@ -26,10 +26,13 @@ class TeamName implements ValidationRule
 
     /**
      * Get a list of all reserved names.
+     *
+     * @return array<int, string>
      */
     protected function reservedNames(): array
     {
-        return once(fn () => collect($this->routesPrefixes())
+        /** @var array<int, string> $names */
+        $names = once(fn () => collect($this->routesPrefixes())
             ->merge([
                 '300',
                 '302',
@@ -364,14 +367,19 @@ class TeamName implements ValidationRule
             ->sort()
             ->values()
             ->toArray());
+
+        return $names;
     }
 
     /**
      * Get a list of reserved names from the application's route prefixes.
+     *
+     * @return array<int, string>
      */
     protected function routesPrefixes(): array
     {
-        return collect(Route::getRoutes()->getRoutes())
+        /** @var array<int, string> $prefixes */
+        $prefixes = collect(Route::getRoutes()->getRoutes())
             ->map(fn (RouteElement $route) => $route->uri)
             ->map(fn (string $uri) => explode('/', $uri)[0])
             ->reject(fn (string $uri) => str_contains($uri, '{'))
@@ -380,5 +388,7 @@ class TeamName implements ValidationRule
             ->sort()
             ->values()
             ->toArray();
+
+        return $prefixes;
     }
 }
