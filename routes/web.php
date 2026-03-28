@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\CategoryController;
 use App\Http\Controllers\Teams\TeamInvitationController;
 use App\Http\Middleware\EnsureTeamMembership;
 use Illuminate\Support\Facades\Route;
@@ -9,10 +10,14 @@ Route::inertia('/', 'welcome', [
     'canRegister' => Features::enabled(Features::registration()),
 ])->name('home');
 
-Route::prefix('{current_team}')
-    ->middleware(['auth', 'verified', EnsureTeamMembership::class])
+Route::middleware(['auth', 'verified', EnsureTeamMembership::class])
     ->group(function () {
-        Route::inertia('dashboard', 'dashboard')->name('dashboard');
+        Route::inertia('{current_team}/dashboard', 'dashboard')->name('dashboard');
+        Route::resource('teams.categories', CategoryController::class)
+            ->parameters([
+                'teams' => 'current_team',
+            ])
+            ->only(['index', 'store', 'update', 'destroy']);
     });
 
 Route::middleware(['auth'])->group(function () {
