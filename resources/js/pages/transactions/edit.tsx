@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Head, Form, usePage } from '@inertiajs/react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -31,6 +32,7 @@ interface Props {
 
 export default function TransactionsEdit({ transaction, categories }: Props) {
     const { currentTeam } = usePage().props;
+    const [amountCents, setAmountCents] = useState(transaction.amount_cents);
 
     if (!currentTeam) {
         return null;
@@ -84,13 +86,17 @@ export default function TransactionsEdit({ transaction, categories }: Props) {
                                     </div>
 
                                     <div className="space-y-1.5">
-                                        <Label htmlFor="amount_cents">Amount (cents)</Label>
+                                        <Label htmlFor="amount_dollars">Amount</Label>
                                         <Input
-                                            id="amount_cents"
+                                            id="amount_dollars"
                                             type="number"
-                                            name="amount_cents"
-                                            defaultValue={transaction.amount_cents}
+                                            step="0.01"
+                                            defaultValue={(transaction.amount_cents / 100).toFixed(2)}
+                                            onChange={(e) =>
+                                                setAmountCents(Math.round(parseFloat(e.target.value || '0') * 100))
+                                            }
                                         />
+                                        <input type="hidden" name="amount_cents" value={amountCents} readOnly />
                                         {errors.amount_cents && (
                                             <p className="text-sm text-destructive">{errors.amount_cents}</p>
                                         )}

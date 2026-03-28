@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Head, Form, usePage } from '@inertiajs/react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -21,6 +22,7 @@ interface Props {
 
 export default function TransactionsCreate({ categories }: Props) {
     const { currentTeam } = usePage().props;
+    const [amountCents, setAmountCents] = useState(0);
 
     if (!currentTeam) {
         return null;
@@ -71,13 +73,17 @@ export default function TransactionsCreate({ categories }: Props) {
                                     </div>
 
                                     <div className="space-y-1.5">
-                                        <Label htmlFor="amount_cents">Amount (cents)</Label>
+                                        <Label htmlFor="amount_dollars">Amount</Label>
                                         <Input
-                                            id="amount_cents"
+                                            id="amount_dollars"
                                             type="number"
-                                            name="amount_cents"
-                                            placeholder="e.g. -2500 for -$25.00"
+                                            step="0.01"
+                                            placeholder="e.g. -25.00 for expense, 1500.00 for income"
+                                            onChange={(e) =>
+                                                setAmountCents(Math.round(parseFloat(e.target.value || '0') * 100))
+                                            }
                                         />
+                                        <input type="hidden" name="amount_cents" value={amountCents} readOnly />
                                         {errors.amount_cents && (
                                             <p className="text-sm text-destructive">{errors.amount_cents}</p>
                                         )}
