@@ -65,7 +65,7 @@ export default function TransactionsEdit({ transaction, categories }: Props) {
                                             id="transacted_at"
                                             type="date"
                                             name="transacted_at"
-                                            defaultValue={transaction.transacted_at}
+                                            defaultValue={transaction.transacted_at.slice(0, 10)}
                                         />
                                         {errors.transacted_at && (
                                             <p className="text-sm text-destructive">{errors.transacted_at}</p>

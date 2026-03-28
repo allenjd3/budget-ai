@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Budget;
 use App\Models\Team;
 use App\Models\Transaction;
 use Illuminate\Http\RedirectResponse;
@@ -24,10 +25,23 @@ class TransactionController extends Controller
             $query->where('category_id', $request->integer('category_id'));
         }
 
+        if ($request->filled('budget_id')) {
+            $budget = Budget::where('team_id', $currentTeam->id)
+                ->find($request->integer('budget_id'));
+
+            if ($budget) {
+                $query->whereYear('transacted_at', $budget->month->year)
+                    ->whereMonth('transacted_at', $budget->month->month);
+            }
+        }
+
         return Inertia::render('transactions/index', [
             'transactions' => $query->paginate(50)->withQueryString(),
             'categories' => $currentTeam->categories()->orderBy('name')->get(['id', 'name', 'is_income', 'color']),
-            'filters' => $request->only('category_id'),
+            'budgets' => Budget::where('team_id', $currentTeam->id)
+                ->orderByDesc('month')
+                ->get(['id', 'month']),
+            'filters' => $request->only('category_id', 'budget_id'),
         ]);
     }
 

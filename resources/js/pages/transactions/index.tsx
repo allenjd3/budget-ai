@@ -31,14 +31,20 @@ interface Paginator<T> {
     prev_page_url: string | null;
 }
 
+interface Budget {
+    id: number;
+    month: string;
+}
+
 interface Props {
     transactions: Paginator<Transaction>;
     categories: Category[];
-    filters: { category_id?: string };
+    budgets: Budget[];
+    filters: { category_id?: string; budget_id?: string };
 }
 
 function formatDate(date: string): string {
-    return new Date(date + 'T00:00:00').toLocaleDateString('en-US', {
+    return new Date(date.slice(0, 10) + 'T00:00:00').toLocaleDateString('en-US', {
         year: 'numeric',
         month: 'short',
         day: 'numeric',
@@ -49,19 +55,28 @@ function formatCurrency(cents: number): string {
     return (cents / 100).toLocaleString('en-US', { style: 'currency', currency: 'USD' });
 }
 
-export default function TransactionsIndex({ transactions, categories, filters }: Props) {
+function formatMonth(month: string): string {
+    return new Date(month.slice(0, 10) + 'T00:00:00').toLocaleDateString('en-US', {
+        year: 'numeric',
+        month: 'long',
+    });
+}
+
+export default function TransactionsIndex({ transactions, categories, budgets, filters }: Props) {
     const { currentTeam } = usePage().props;
 
     if (!currentTeam) {
         return null;
     }
 
-    function filterByCategory(categoryId: string) {
-        router.get(
-            transactionsIndex.url(currentTeam!.slug),
-            categoryId ? { category_id: categoryId } : {},
-            { preserveState: true, replace: true },
-        );
+    function applyFilter(patch: Record<string, string>) {
+        const current: Record<string, string> = {};
+        if (filters.category_id) current.category_id = filters.category_id;
+        if (filters.budget_id) current.budget_id = filters.budget_id;
+        const next = { ...current, ...patch };
+        // Remove empty values
+        Object.keys(next).forEach((k) => { if (!next[k]) delete next[k]; });
+        router.get(transactionsIndex.url(currentTeam!.slug), next, { preserveState: true, replace: true });
     }
 
     return (
@@ -76,10 +91,22 @@ export default function TransactionsIndex({ transactions, categories, filters }:
                 </div>
 
                 {/* Filters */}
-                <div className="flex items-center gap-3">
+                <div className="flex flex-wrap items-center gap-3">
+                    <select
+                        value={filters.budget_id ?? ''}
+                        onChange={(e) => applyFilter({ budget_id: e.target.value })}
+                        className="border-input bg-background focus-visible:ring-ring h-9 rounded-md border px-3 py-1 text-sm shadow-xs focus-visible:ring-1 focus-visible:outline-none"
+                    >
+                        <option value="">All months</option>
+                        {budgets.map((b) => (
+                            <option key={b.id} value={b.id}>
+                                {formatMonth(b.month)}
+                            </option>
+                        ))}
+                    </select>
                     <select
                         value={filters.category_id ?? ''}
-                        onChange={(e) => filterByCategory(e.target.value)}
+                        onChange={(e) => applyFilter({ category_id: e.target.value })}
                         className="border-input bg-background focus-visible:ring-ring h-9 rounded-md border px-3 py-1 text-sm shadow-xs focus-visible:ring-1 focus-visible:outline-none"
                     >
                         <option value="">All categories</option>
