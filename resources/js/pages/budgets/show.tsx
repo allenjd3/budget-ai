@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { Head, Form, usePage } from '@inertiajs/react';
+import { useState, useRef } from 'react';
+import { Head, Form, usePage, router } from '@inertiajs/react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -57,21 +57,27 @@ function toCents(dollars: string): number {
     return Math.round(parseFloat(dollars || '0') * 100);
 }
 
-function remaining(line: BudgetLine): number {
+function remaining(line: BudgetLine, allocatedCents: number): number {
     if (line.category.is_income) {
-        // How much above/below expected income
-        return line.actual_cents - line.allocated_cents;
+        return line.actual_cents - allocatedCents;
     }
-    // How much budget is left (actual is negative for expenses)
-    return line.allocated_cents + line.actual_cents;
+    return allocatedCents + line.actual_cents;
 }
 
 export default function BudgetsShow({ budget, availableCategories }: Props) {
     const { currentTeam } = usePage().props;
 
-    const [allocations, setAllocations] = useState<Record<number, number>>(
+    // displayValues: what's shown in each input (dollar string)
+    const [displayValues, setDisplayValues] = useState<Record<number, string>>(
+        () => Object.fromEntries(budget.lines.map((l) => [l.id, (l.allocated_cents / 100).toFixed(2)])),
+    );
+    // savedCents: last successfully persisted value per line — used to detect dirty state and for totals
+    const [savedCents, setSavedCents] = useState<Record<number, number>>(
         () => Object.fromEntries(budget.lines.map((l) => [l.id, l.allocated_cents])),
     );
+    const [saving, setSaving] = useState<Record<number, boolean>>({});
+    const inputRefs = useRef<Record<number, HTMLInputElement | null>>({});
+
     const [newLineCents, setNewLineCents] = useState(0);
     const [totalCents, setTotalCents] = useState<number | null>(budget.total_cents);
 
@@ -79,9 +85,51 @@ export default function BudgetsShow({ budget, availableCategories }: Props) {
         return null;
     }
 
-    const totalAllocated = budget.lines.reduce((sum, line) => sum + line.allocated_cents, 0);
+    const lineIds = budget.lines.map((l) => l.id);
+
+    const totalAllocated = budget.lines
+        .filter((line) => !line.category.is_income)
+        .reduce((sum, line) => sum + (savedCents[line.id] ?? line.allocated_cents), 0);
     const totalActual = budget.lines.reduce((sum, line) => sum + line.actual_cents, 0);
-    const totalRemaining = budget.lines.reduce((sum, line) => sum + remaining(line), 0);
+    const totalRemaining = budget.lines.reduce(
+        (sum, line) => sum + remaining(line, savedCents[line.id] ?? line.allocated_cents),
+        0,
+    );
+
+    function saveAllocation(lineId: number, next?: () => void) {
+        const cents = toCents(displayValues[lineId] ?? '0');
+        if (cents === (savedCents[lineId] ?? 0)) {
+            next?.();
+            return;
+        }
+        setSaving((prev) => ({ ...prev, [lineId]: true }));
+        router.patch(
+            lineUpdate.url({ current_team: currentTeam!.slug, budget: budget.id, line: lineId }),
+            { allocated_cents: cents },
+            {
+                preserveScroll: true,
+                onSuccess: () => {
+                    setSavedCents((prev) => ({ ...prev, [lineId]: cents }));
+                    setSaving((prev) => ({ ...prev, [lineId]: false }));
+                    next?.();
+                },
+                onError: () => setSaving((prev) => ({ ...prev, [lineId]: false })),
+            },
+        );
+    }
+
+    function handleKeyDown(e: React.KeyboardEvent<HTMLInputElement>, lineId: number) {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            const idx = lineIds.indexOf(lineId);
+            const nextId = lineIds[idx + 1];
+            saveAllocation(lineId, () => {
+                if (nextId !== undefined) {
+                    inputRefs.current[nextId]?.focus();
+                }
+            });
+        }
+    }
 
     return (
         <>
@@ -173,95 +221,77 @@ export default function BudgetsShow({ budget, availableCategories }: Props) {
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y">
-                                    {budget.lines.map((line) => (
-                                        <tr key={line.id}>
-                                            <td className="py-2">
-                                                <div className="flex items-center gap-2">
-                                                    {line.category.color && (
-                                                        <span
-                                                            className="inline-block size-3 rounded-full"
-                                                            style={{ backgroundColor: line.category.color }}
-                                                        />
-                                                    )}
-                                                    {line.category.name}
-                                                </div>
-                                            </td>
-                                            <td className="py-2">
-                                                <Form
-                                                    action={lineUpdate.url({
-                                                        current_team: currentTeam.slug,
-                                                        budget: budget.id,
-                                                        line: line.id,
-                                                    })}
-                                                    method="patch"
-                                                    className="flex items-center gap-2"
-                                                >
-                                                    {({ processing }) => (
-                                                        <>
-                                                            <Input
-                                                                type="number"
-                                                                step="0.01"
-                                                                min="0"
-                                                                defaultValue={(line.allocated_cents / 100).toFixed(2)}
-                                                                placeholder="0.00"
-                                                                className="w-28"
-                                                                onChange={(e) =>
-                                                                    setAllocations((prev) => ({
-                                                                        ...prev,
-                                                                        [line.id]: toCents(e.target.value),
-                                                                    }))
-                                                                }
+                                    {budget.lines.map((line) => {
+                                        const isSaving = saving[line.id] ?? false;
+                                        const isDirty = toCents(displayValues[line.id] ?? '0') !== (savedCents[line.id] ?? line.allocated_cents);
+                                        const lineSavedCents = savedCents[line.id] ?? line.allocated_cents;
+                                        return (
+                                            <tr key={line.id}>
+                                                <td className="py-2">
+                                                    <div className="flex items-center gap-2">
+                                                        {line.category.color && (
+                                                            <span
+                                                                className="inline-block size-3 rounded-full"
+                                                                style={{ backgroundColor: line.category.color }}
                                                             />
-                                                            <input
-                                                                type="hidden"
-                                                                name="allocated_cents"
-                                                                value={allocations[line.id] ?? line.allocated_cents}
-                                                                readOnly
-                                                            />
+                                                        )}
+                                                        {line.category.name}
+                                                    </div>
+                                                </td>
+                                                <td className="py-2">
+                                                    <Input
+                                                        ref={(el) => { inputRefs.current[line.id] = el; }}
+                                                        type="number"
+                                                        step="0.01"
+                                                        min="0"
+                                                        placeholder="0.00"
+                                                        className={`w-28 ${isDirty ? 'ring-1 ring-primary/60' : ''}`}
+                                                        value={displayValues[line.id] ?? ''}
+                                                        disabled={isSaving}
+                                                        onChange={(e) =>
+                                                            setDisplayValues((prev) => ({
+                                                                ...prev,
+                                                                [line.id]: e.target.value,
+                                                            }))
+                                                        }
+                                                        onKeyDown={(e) => handleKeyDown(e, line.id)}
+                                                        onFocus={(e) => e.target.select()}
+                                                        onBlur={() => saveAllocation(line.id)}
+                                                    />
+                                                </td>
+                                                <td className="py-2 text-sm text-muted-foreground">
+                                                    {formatCurrency(line.actual_cents)}
+                                                </td>
+                                                <td className={`py-2 text-sm font-medium ${remaining(line, lineSavedCents) >= 0 ? 'text-green-600' : 'text-destructive'}`}>
+                                                    {remaining(line, lineSavedCents) >= 0 ? '+' : ''}
+                                                    {formatCurrency(remaining(line, lineSavedCents))}
+                                                </td>
+                                                <td className="py-2 text-right">
+                                                    <Form
+                                                        action={lineDestroy.url({
+                                                            current_team: currentTeam.slug,
+                                                            budget: budget.id,
+                                                            line: line.id,
+                                                        })}
+                                                        method="delete"
+                                                        className="inline"
+                                                    >
+                                                        {({ processing }) => (
                                                             <Button
                                                                 type="submit"
-                                                                variant="outline"
+                                                                variant="ghost"
                                                                 size="sm"
                                                                 disabled={processing}
+                                                                className="text-muted-foreground hover:text-destructive"
                                                             >
-                                                                Save
+                                                                Remove
                                                             </Button>
-                                                        </>
-                                                    )}
-                                                </Form>
-                                            </td>
-                                            <td className="py-2 text-sm text-muted-foreground">
-                                                {formatCurrency(line.actual_cents)}
-                                            </td>
-                                            <td className={`py-2 text-sm font-medium ${remaining(line) >= 0 ? 'text-green-600' : 'text-destructive'}`}>
-                                                {remaining(line) >= 0 ? '+' : ''}
-                                                {formatCurrency(remaining(line))}
-                                            </td>
-                                            <td className="py-2 text-right">
-                                                <Form
-                                                    action={lineDestroy.url({
-                                                        current_team: currentTeam.slug,
-                                                        budget: budget.id,
-                                                        line: line.id,
-                                                    })}
-                                                    method="delete"
-                                                    className="inline"
-                                                >
-                                                    {({ processing }) => (
-                                                        <Button
-                                                            type="submit"
-                                                            variant="ghost"
-                                                            size="sm"
-                                                            disabled={processing}
-                                                            className="text-muted-foreground hover:text-destructive"
-                                                        >
-                                                            Remove
-                                                        </Button>
-                                                    )}
-                                                </Form>
-                                            </td>
-                                        </tr>
-                                    ))}
+                                                        )}
+                                                    </Form>
+                                                </td>
+                                            </tr>
+                                        );
+                                    })}
                                 </tbody>
                                 <tfoot>
                                     <tr className="border-t font-medium">
