@@ -10,6 +10,7 @@ interface Budget {
     total_cents: number | null;
     lines_count: number;
     lines_sum_allocated_cents: number | null;
+    expense_lines_sum_allocated_cents: number | null;
     actual_cents: number;
 }
 
@@ -70,7 +71,7 @@ export default function BudgetsIndex({ budgets }: Props) {
                                             <div className="flex items-center gap-6 text-sm">
                                                 <div>
                                                     <span className="text-muted-foreground">Planned </span>
-                                                    <span className="font-medium">{formatCurrency(budget.lines_sum_allocated_cents ?? 0)}</span>
+                                                    <span className="font-medium">{formatCurrency(budget.expense_lines_sum_allocated_cents ?? 0)}</span>
                                                 </div>
                                                 <div>
                                                     <span className="text-muted-foreground">Spent </span>
@@ -88,7 +89,7 @@ export default function BudgetsIndex({ budgets }: Props) {
 
                                             {/* Progress bar (only when total is set) */}
                                             {budget.total_cents ? (() => {
-                                                const planned = budget.lines_sum_allocated_cents ?? 0;
+                                                const planned = budget.expense_lines_sum_allocated_cents ?? 0;
                                                 const spent = Math.abs(budget.actual_cents);
                                                 const total = budget.total_cents;
                                                 const plannedPct = Math.min((planned / total) * 100, 100);

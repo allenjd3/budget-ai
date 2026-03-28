@@ -19,12 +19,15 @@ class BudgetController extends Controller
         $budgets = Budget::where('team_id', $currentTeam->id)
             ->withCount('lines')
             ->withSum('lines', 'allocated_cents')
+            ->withSum(['lines as expense_lines_sum_allocated_cents' => fn ($q) => $q->whereHas('category', fn ($q) => $q->where('is_income', false))], 'allocated_cents')
             ->orderByDesc('month')
             ->get();
 
-        // Actual spending per month-key (one query, no N+1)
+        // Expense-only spending per month-key (excludes income transactions)
         $actuals = $currentTeam->transactions()
-            ->selectRaw("strftime('%Y-%m', transacted_at) as month_key, SUM(amount_cents) as total_cents")
+            ->join('categories', 'transactions.category_id', '=', 'categories.id')
+            ->where('categories.is_income', false)
+            ->selectRaw("strftime('%Y-%m', transacted_at) as month_key, SUM(transactions.amount_cents) as total_cents")
             ->groupByRaw("strftime('%Y-%m', transacted_at)")
             ->pluck('total_cents', 'month_key')
             ->map(fn (mixed $v): int => is_numeric($v) ? (int) $v : 0);
