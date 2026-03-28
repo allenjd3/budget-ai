@@ -1,8 +1,8 @@
+import { useState, useRef } from 'react';
 import { Head, Form, usePage } from '@inertiajs/react';
+import { UploadCloud } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import {
     index as importsIndex,
     store as importsStore,
@@ -44,9 +44,37 @@ const statusClass: Record<CsvImport['status'], string> = {
 
 export default function ImportsIndex({ imports }: Props) {
     const { currentTeam } = usePage().props;
+    const [dragging, setDragging] = useState(false);
+    const [file, setFile] = useState<File | null>(null);
+    const inputRef = useRef<HTMLInputElement>(null);
 
     if (!currentTeam) {
         return null;
+    }
+
+    function handleDragOver(e: React.DragEvent) {
+        e.preventDefault();
+        setDragging(true);
+    }
+
+    function handleDragLeave(e: React.DragEvent) {
+        // Only clear if leaving the drop zone entirely (not a child element)
+        if (!e.currentTarget.contains(e.relatedTarget as Node)) {
+            setDragging(false);
+        }
+    }
+
+    function handleDrop(e: React.DragEvent) {
+        e.preventDefault();
+        setDragging(false);
+        const dropped = e.dataTransfer.files[0];
+        if (dropped) {
+            setFile(dropped);
+        }
+    }
+
+    function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+        setFile(e.target.files?.[0] ?? null);
     }
 
     return (
@@ -67,22 +95,52 @@ export default function ImportsIndex({ imports }: Props) {
                         >
                             {({ errors, processing }) => (
                                 <div className="space-y-4">
-                                    <div className="space-y-1.5">
-                                        <Label htmlFor="file">CSV File</Label>
-                                        <Input
-                                            id="file"
+                                    {/* Drop zone */}
+                                    <div
+                                        role="button"
+                                        tabIndex={0}
+                                        onDragOver={handleDragOver}
+                                        onDragLeave={handleDragLeave}
+                                        onDrop={handleDrop}
+                                        onClick={() => inputRef.current?.click()}
+                                        onKeyDown={(e) => e.key === 'Enter' && inputRef.current?.click()}
+                                        className={`flex cursor-pointer flex-col items-center justify-center gap-3 rounded-lg border-2 border-dashed px-6 py-10 text-center transition-colors ${
+                                            dragging
+                                                ? 'border-primary bg-primary/5'
+                                                : 'border-input hover:border-primary/50 hover:bg-muted/50'
+                                        }`}
+                                    >
+                                        <UploadCloud className={`size-8 ${dragging ? 'text-primary' : 'text-muted-foreground'}`} />
+                                        {file ? (
+                                            <div>
+                                                <p className="text-sm font-medium">{file.name}</p>
+                                                <p className="text-xs text-muted-foreground">
+                                                    {(file.size / 1024).toFixed(1)} KB · Click to change
+                                                </p>
+                                            </div>
+                                        ) : (
+                                            <div>
+                                                <p className="text-sm font-medium">
+                                                    Drop your CSV here, or <span className="text-primary">browse</span>
+                                                </p>
+                                                <p className="text-xs text-muted-foreground">CSV or TXT · Max 5 MB</p>
+                                            </div>
+                                        )}
+                                        <input
+                                            ref={inputRef}
                                             type="file"
                                             name="file"
                                             accept=".csv,.txt"
+                                            className="sr-only"
+                                            onChange={handleFileChange}
                                         />
-                                        <p className="text-xs text-muted-foreground">
-                                            Upload a CSV exported from your bank. Max 5 MB.
-                                        </p>
-                                        {errors.file && (
-                                            <p className="text-sm text-destructive">{errors.file}</p>
-                                        )}
                                     </div>
-                                    <Button type="submit" disabled={processing}>
+
+                                    {errors.file && (
+                                        <p className="text-sm text-destructive">{errors.file}</p>
+                                    )}
+
+                                    <Button type="submit" disabled={processing || !file} className="w-full">
                                         {processing ? 'Uploading…' : 'Upload & Map Columns'}
                                     </Button>
                                 </div>
