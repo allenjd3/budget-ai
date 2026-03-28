@@ -1,12 +1,112 @@
+import { useState } from 'react';
 import { Head, Form, usePage } from '@inertiajs/react';
+import { ChevronLeft, ChevronRight, CalendarIcon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { store as budgetsStore, index as budgetsIndex, create as budgetsCreate } from '@/actions/App/Http/Controllers/BudgetController';
 
-export default function BudgetsCreate() {
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+function MonthPicker({ value, onChange }: { value: string; onChange: (val: string) => void }) {
+    const today = new Date();
+    const [year, setYear] = useState(value ? parseInt(value.slice(0, 4)) : today.getFullYear());
+    const [open, setOpen] = useState(false);
+
+    const selectedYear = value ? parseInt(value.slice(0, 4)) : null;
+    const selectedMonth = value ? parseInt(value.slice(5, 7)) - 1 : null;
+
+    const label =
+        selectedYear !== null && selectedMonth !== null
+            ? `${MONTHS[selectedMonth]} ${selectedYear}`
+            : 'Pick a month';
+
+    function select(monthIndex: number) {
+        const mm = String(monthIndex + 1).padStart(2, '0');
+        onChange(`${year}-${mm}-01`);
+        setOpen(false);
+    }
+
+    return (
+        <Popover open={open} onOpenChange={setOpen}>
+            <PopoverTrigger asChild>
+                <Button
+                    type="button"
+                    variant="outline"
+                    className="w-full justify-start gap-2 font-normal"
+                >
+                    <CalendarIcon className="size-4 text-muted-foreground" />
+                    <span className={value ? '' : 'text-muted-foreground'}>{label}</span>
+                </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-64 p-3" align="start">
+                {/* Year navigation */}
+                <div className="mb-3 flex items-center justify-between">
+                    <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="size-7"
+                        onClick={() => setYear((y) => y - 1)}
+                    >
+                        <ChevronLeft className="size-4" />
+                    </Button>
+                    <span className="text-sm font-medium">{year}</span>
+                    <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="size-7"
+                        onClick={() => setYear((y) => y + 1)}
+                    >
+                        <ChevronRight className="size-4" />
+                    </Button>
+                </div>
+
+                {/* Month grid */}
+                <div className="grid grid-cols-3 gap-1">
+                    {MONTHS.map((name, i) => {
+                        const isSelected = year === selectedYear && i === selectedMonth;
+                        return (
+                            <Button
+                                key={name}
+                                type="button"
+                                variant={isSelected ? 'default' : 'ghost'}
+                                size="sm"
+                                className="h-8 text-xs"
+                                onClick={() => select(i)}
+                            >
+                                {name}
+                            </Button>
+                        );
+                    })}
+                </div>
+            </PopoverContent>
+        </Popover>
+    );
+}
+
+interface PreviousBudget {
+    id: number;
+    month: string;
+}
+
+interface Props {
+    previousBudget: PreviousBudget | null;
+}
+
+function formatMonth(month: string): string {
+    return new Date(month.slice(0, 10) + 'T00:00:00').toLocaleDateString('en-US', {
+        year: 'numeric',
+        month: 'long',
+    });
+}
+
+export default function BudgetsCreate({ previousBudget }: Props) {
     const { currentTeam } = usePage().props;
+    const [month, setMonth] = useState('');
+    const [copyPrevious, setCopyPrevious] = useState(true);
 
     if (!currentTeam) {
         return null;
@@ -29,16 +129,30 @@ export default function BudgetsCreate() {
                             {({ errors, processing }) => (
                                 <>
                                     <div className="space-y-1.5">
-                                        <Label htmlFor="month">Month</Label>
-                                        <Input
-                                            id="month"
-                                            type="month"
-                                            name="month"
-                                        />
+                                        <Label>Month</Label>
+                                        <MonthPicker value={month} onChange={setMonth} />
+                                        <input type="hidden" name="month" value={month} readOnly />
                                         {errors.month && (
                                             <p className="text-sm text-destructive">{errors.month}</p>
                                         )}
                                     </div>
+
+                                    {previousBudget && (
+                                        <label className="flex cursor-pointer items-center gap-2.5">
+                                            <input
+                                                type="checkbox"
+                                                name="copy_from_budget_id"
+                                                value={previousBudget.id}
+                                                checked={copyPrevious}
+                                                onChange={(e) => setCopyPrevious(e.target.checked)}
+                                                className="size-4 rounded border-input accent-primary"
+                                            />
+                                            <span className="text-sm">
+                                                Copy allocations from{' '}
+                                                <span className="font-medium">{formatMonth(previousBudget.month)}</span>
+                                            </span>
+                                        </label>
+                                    )}
 
                                     <div className="space-y-1.5">
                                         <Label htmlFor="notes">

@@ -12,8 +12,12 @@ use Illuminate\Support\Carbon;
 
 /**
  * @property Carbon $month
+ * @property int|null $total_cents
+ * @property int|null $lines_count
+ * @property int|null $lines_sum_allocated_cents
+ * @property int $actual_cents
  */
-#[Fillable(['team_id', 'month', 'notes'])]
+#[Fillable(['team_id', 'month', 'notes', 'total_cents'])]
 class Budget extends Model
 {
     /** @use HasFactory<BudgetFactory> */
@@ -42,6 +46,7 @@ class Budget extends Model
     {
         return [
             'month' => 'date',
+            'total_cents' => 'integer',
         ];
     }
 }
