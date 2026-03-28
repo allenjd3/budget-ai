@@ -1,10 +1,11 @@
+import { useState } from 'react';
 import { Head, Form, usePage } from '@inertiajs/react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { index as budgetsIndex, show as budgetShow } from '@/actions/App/Http/Controllers/BudgetController';
-import { store as linesStore, destroy as lineDestroy } from '@/actions/App/Http/Controllers/BudgetLineController';
+import { store as linesStore, update as lineUpdate, destroy as lineDestroy } from '@/actions/App/Http/Controllers/BudgetLineController';
 
 interface Category {
     id: number;
@@ -42,8 +43,17 @@ function formatMonth(month: string): string {
     });
 }
 
+function toCents(dollars: string): number {
+    return Math.round(parseFloat(dollars || '0') * 100);
+}
+
 export default function BudgetsShow({ budget }: Props) {
     const { currentTeam } = usePage().props;
+
+    const [allocations, setAllocations] = useState<Record<number, number>>(
+        () => Object.fromEntries(budget.lines.map((l) => [l.id, l.allocated_cents])),
+    );
+    const [newLineCents, setNewLineCents] = useState(0);
 
     if (!currentTeam) {
         return null;
@@ -75,7 +85,7 @@ export default function BudgetsShow({ budget }: Props) {
                                 <thead>
                                     <tr className="border-b text-left text-muted-foreground">
                                         <th className="pb-2 font-medium">Category</th>
-                                        <th className="pb-2 text-right font-medium">Allocated</th>
+                                        <th className="pb-2 font-medium">Allocated</th>
                                         <th className="pb-2" />
                                     </tr>
                                 </thead>
@@ -93,8 +103,49 @@ export default function BudgetsShow({ budget }: Props) {
                                                     {line.category.name}
                                                 </div>
                                             </td>
-                                            <td className="py-2 text-right">
-                                                {formatCurrency(line.allocated_cents)}
+                                            <td className="py-2">
+                                                <Form
+                                                    action={lineUpdate.url({
+                                                        current_team: currentTeam.slug,
+                                                        budget: budget.id,
+                                                        line: line.id,
+                                                    })}
+                                                    method="patch"
+                                                    className="flex items-center gap-2"
+                                                >
+                                                    {({ processing }) => (
+                                                        <>
+                                                            <Input
+                                                                type="number"
+                                                                step="0.01"
+                                                                min="0"
+                                                                defaultValue={(line.allocated_cents / 100).toFixed(2)}
+                                                                placeholder="0.00"
+                                                                className="w-28"
+                                                                onChange={(e) =>
+                                                                    setAllocations((prev) => ({
+                                                                        ...prev,
+                                                                        [line.id]: toCents(e.target.value),
+                                                                    }))
+                                                                }
+                                                            />
+                                                            <input
+                                                                type="hidden"
+                                                                name="allocated_cents"
+                                                                value={allocations[line.id] ?? line.allocated_cents}
+                                                                readOnly
+                                                            />
+                                                            <Button
+                                                                type="submit"
+                                                                variant="outline"
+                                                                size="sm"
+                                                                disabled={processing}
+                                                            >
+                                                                Save
+                                                            </Button>
+                                                        </>
+                                                    )}
+                                                </Form>
                                             </td>
                                             <td className="py-2 text-right">
                                                 <Form
@@ -125,7 +176,7 @@ export default function BudgetsShow({ budget }: Props) {
                                 <tfoot>
                                     <tr className="border-t font-medium">
                                         <td className="pt-2">Total</td>
-                                        <td className="pt-2 text-right">{formatCurrency(totalAllocated)}</td>
+                                        <td className="pt-2">{formatCurrency(totalAllocated)}</td>
                                         <td />
                                     </tr>
                                 </tfoot>
@@ -163,14 +214,17 @@ export default function BudgetsShow({ budget }: Props) {
                                     </div>
 
                                     <div className="space-y-1.5">
-                                        <Label htmlFor="allocated_cents">Amount (cents)</Label>
+                                        <Label htmlFor="allocated_dollars">Amount</Label>
                                         <Input
-                                            id="allocated_cents"
+                                            id="allocated_dollars"
                                             type="number"
-                                            name="allocated_cents"
+                                            step="0.01"
                                             min="0"
+                                            placeholder="0.00"
                                             className="w-36"
+                                            onChange={(e) => setNewLineCents(toCents(e.target.value))}
                                         />
+                                        <input type="hidden" name="allocated_cents" value={newLineCents} readOnly />
                                         {errors.allocated_cents && (
                                             <p className="text-sm text-destructive">{errors.allocated_cents}</p>
                                         )}
@@ -189,20 +243,18 @@ export default function BudgetsShow({ budget }: Props) {
     );
 }
 
-BudgetsShow.layout = (
-    props: { currentTeam?: { slug: string } | null },
-    pageProps?: { budget?: { id: number; month: string } },
-) => ({
+// Single-param function so Inertia treats the return value as layout props (length <= 1 check)
+BudgetsShow.layout = (props: { currentTeam?: { slug: string } | null; budget?: { id: number; month: string } }) => ({
     breadcrumbs: [
         {
             title: 'Budgets',
             href: props.currentTeam ? budgetsIndex.url(props.currentTeam.slug) : '/',
         },
         {
-            title: pageProps?.budget ? formatMonth(pageProps.budget.month) : 'Budget',
+            title: props.budget ? formatMonth(props.budget.month) : 'Budget',
             href:
-                props.currentTeam && pageProps?.budget
-                    ? budgetShow.url({ current_team: props.currentTeam.slug, budget: pageProps.budget.id })
+                props.currentTeam && props.budget
+                    ? budgetShow.url({ current_team: props.currentTeam.slug, budget: props.budget.id })
                     : '/',
         },
     ],
