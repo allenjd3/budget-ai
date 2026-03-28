@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Budget;
+use App\Models\BudgetLine;
 use App\Models\Team;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -65,8 +66,21 @@ class BudgetController extends Controller
 
         $budget->load(['lines.category']);
 
+        $actuals = $currentTeam->transactions()
+            ->whereYear('transacted_at', $budget->month->year)
+            ->whereMonth('transacted_at', $budget->month->month)
+            ->whereNotNull('category_id')
+            ->selectRaw('category_id, SUM(amount_cents) as total_cents')
+            ->groupBy('category_id')
+            ->pluck('total_cents', 'category_id')
+            ->map(fn (mixed $total): int => is_numeric($total) ? (int) $total : 0);
+
         return Inertia::render('budgets/show', [
-            'budget' => $budget,
+            'budget' => array_merge($budget->toArray(), [
+                'lines' => $budget->lines->map(fn (BudgetLine $line) => array_merge($line->toArray(), [
+                    'actual_cents' => $actuals->get($line->category_id, 0),
+                ])),
+            ]),
         ]);
     }
 

@@ -18,6 +18,7 @@ interface BudgetLine {
     id: number;
     category_id: number;
     allocated_cents: number;
+    actual_cents: number;
     category: Category;
 }
 
@@ -47,6 +48,15 @@ function toCents(dollars: string): number {
     return Math.round(parseFloat(dollars || '0') * 100);
 }
 
+function remaining(line: BudgetLine): number {
+    if (line.category.is_income) {
+        // How much above/below expected income
+        return line.actual_cents - line.allocated_cents;
+    }
+    // How much budget is left (actual is negative for expenses)
+    return line.allocated_cents + line.actual_cents;
+}
+
 export default function BudgetsShow({ budget }: Props) {
     const { currentTeam } = usePage().props;
 
@@ -60,6 +70,8 @@ export default function BudgetsShow({ budget }: Props) {
     }
 
     const totalAllocated = budget.lines.reduce((sum, line) => sum + line.allocated_cents, 0);
+    const totalActual = budget.lines.reduce((sum, line) => sum + line.actual_cents, 0);
+    const totalRemaining = budget.lines.reduce((sum, line) => sum + remaining(line), 0);
 
     return (
         <>
@@ -86,6 +98,8 @@ export default function BudgetsShow({ budget }: Props) {
                                     <tr className="border-b text-left text-muted-foreground">
                                         <th className="pb-2 font-medium">Category</th>
                                         <th className="pb-2 font-medium">Allocated</th>
+                                        <th className="pb-2 font-medium">Actual</th>
+                                        <th className="pb-2 font-medium">Remaining</th>
                                         <th className="pb-2" />
                                     </tr>
                                 </thead>
@@ -147,6 +161,13 @@ export default function BudgetsShow({ budget }: Props) {
                                                     )}
                                                 </Form>
                                             </td>
+                                            <td className="py-2 text-sm text-muted-foreground">
+                                                {formatCurrency(line.actual_cents)}
+                                            </td>
+                                            <td className={`py-2 text-sm font-medium ${remaining(line) >= 0 ? 'text-green-600' : 'text-destructive'}`}>
+                                                {remaining(line) >= 0 ? '+' : ''}
+                                                {formatCurrency(remaining(line))}
+                                            </td>
                                             <td className="py-2 text-right">
                                                 <Form
                                                     action={lineDestroy.url({
@@ -177,6 +198,11 @@ export default function BudgetsShow({ budget }: Props) {
                                     <tr className="border-t font-medium">
                                         <td className="pt-2">Total</td>
                                         <td className="pt-2">{formatCurrency(totalAllocated)}</td>
+                                        <td className="pt-2 text-sm text-muted-foreground">{formatCurrency(totalActual)}</td>
+                                        <td className={`pt-2 text-sm ${totalRemaining >= 0 ? 'text-green-600' : 'text-destructive'}`}>
+                                            {totalRemaining >= 0 ? '+' : ''}
+                                            {formatCurrency(totalRemaining)}
+                                        </td>
                                         <td />
                                     </tr>
                                 </tfoot>

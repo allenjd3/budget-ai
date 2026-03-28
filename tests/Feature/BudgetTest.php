@@ -4,6 +4,7 @@ use App\Models\Budget;
 use App\Models\BudgetLine;
 use App\Models\Category;
 use App\Models\Team;
+use App\Models\Transaction;
 use App\Models\User;
 use Carbon\Carbon;
 use Database\Seeders\DefaultCategoriesSeeder;
@@ -252,4 +253,87 @@ it('cannot modify budget lines of another teams budget', function () {
             'allocated_cents' => 99999,
         ])
         ->assertForbidden();
+});
+
+// --- Budget vs. Actual ---
+
+it('includes actual_cents per budget line based on transactions in that month', function () {
+    $user = User::factory()->create();
+    $team = $user->currentTeam;
+    $budget = Budget::factory()->for($team)->create(['month' => '2026-03-01']);
+    $category = Category::where('team_id', $team->id)->first();
+    BudgetLine::factory()->for($budget)->for($category)->create(['allocated_cents' => 50000]);
+
+    Transaction::factory()->for($team)->withCategory($category)->create([
+        'transacted_at' => '2026-03-15',
+        'amount_cents' => -20000,
+    ]);
+    Transaction::factory()->for($team)->withCategory($category)->create([
+        'transacted_at' => '2026-03-28',
+        'amount_cents' => -5000,
+    ]);
+
+    $this->actingAs($user)
+        ->get(route('teams.budgets.show', ['current_team' => $team, 'budget' => $budget]))
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page
+            ->where('budget.lines.0.actual_cents', -25000)
+        );
+});
+
+it('shows zero actual_cents when no transactions exist for a budget line in that month', function () {
+    $user = User::factory()->create();
+    $team = $user->currentTeam;
+    $budget = Budget::factory()->for($team)->create(['month' => '2026-03-01']);
+    $category = Category::where('team_id', $team->id)->first();
+    BudgetLine::factory()->for($budget)->for($category)->create(['allocated_cents' => 50000]);
+
+    $this->actingAs($user)
+        ->get(route('teams.budgets.show', ['current_team' => $team, 'budget' => $budget]))
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page
+            ->where('budget.lines.0.actual_cents', 0)
+        );
+});
+
+it('does not include transactions from other months in actuals', function () {
+    $user = User::factory()->create();
+    $team = $user->currentTeam;
+    $budget = Budget::factory()->for($team)->create(['month' => '2026-03-01']);
+    $category = Category::where('team_id', $team->id)->first();
+    BudgetLine::factory()->for($budget)->for($category)->create(['allocated_cents' => 50000]);
+
+    Transaction::factory()->for($team)->withCategory($category)->create([
+        'transacted_at' => '2026-02-15',
+        'amount_cents' => -20000,
+    ]);
+
+    $this->actingAs($user)
+        ->get(route('teams.budgets.show', ['current_team' => $team, 'budget' => $budget]))
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page
+            ->where('budget.lines.0.actual_cents', 0)
+        );
+});
+
+it('does not include transactions from other teams in actuals', function () {
+    $user = User::factory()->create();
+    $team = $user->currentTeam;
+    $otherTeam = Team::factory()->create();
+    $budget = Budget::factory()->for($team)->create(['month' => '2026-03-01']);
+    $category = Category::where('team_id', $team->id)->first();
+    BudgetLine::factory()->for($budget)->for($category)->create(['allocated_cents' => 50000]);
+
+    Transaction::factory()->for($otherTeam)->create([
+        'category_id' => $category->id,
+        'transacted_at' => '2026-03-15',
+        'amount_cents' => -20000,
+    ]);
+
+    $this->actingAs($user)
+        ->get(route('teams.budgets.show', ['current_team' => $team, 'budget' => $budget]))
+        ->assertOk()
+        ->assertInertia(fn ($page) => $page
+            ->where('budget.lines.0.actual_cents', 0)
+        );
 });
